@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   GraduationCap,
@@ -6,19 +6,33 @@ import {
   Link2,
   Mail,
   Phone,
-  Calendar,
+  FileText,
   Sparkles,
   Save,
   CheckCircle2,
   AlertCircle,
   ExternalLink,
   Edit3,
-  Check,
+  Plus,
+  Trash2,
+  Loader2,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePlacement } from '../context/PlacementContext';
 import SkillTagInput from '../components/profile/SkillTagInput';
 import { BRANCH_OPTIONS } from '../mock/mockData';
+
+const API_BASE = 'http://localhost:5000';
+
+const isValidUrl = (value) => {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -29,43 +43,53 @@ export default function ProfilePage() {
     branch: user?.branch || profile.branch || 'CSE',
     cgpa: (user?.cgpa ?? profile.cgpa ?? 8.8).toString(),
     skills: profile.skills || ['React', 'JavaScript', 'Node.js', 'Python'],
-    resumeLink: profile.resumeLink || '',
-    phone: profile.phone || '+91 98765 43210',
-    rollNo: profile.rollNo || '2023CSB1042',
+    phone: profile.phone || '',
+    rollNo: profile.rollNo || '',
     bio: profile.bio || '',
+    links: profile.links || [],
   });
 
+  // Resume upload state
+  const [resumeState, setResumeState] = useState({
+    uploading: false,
+    fileName: profile.resumeOriginalName || null,
+    resumeUrl: profile.resumeFileName
+      ? `${API_BASE}/uploads/resumes/${profile.resumeFileName}`
+      : null,
+    error: null,
+  });
+  const fileInputRef = useRef(null);
+
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
 
-  const isValidUrl = (value) => {
-    try {
-      const url = new URL(value.trim());
-      return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch {
-      return false;
+  // Sync resumeState when profile data arrives (e.g. after login re-load)
+  useEffect(() => {
+    if (profile.resumeOriginalName) {
+      setResumeState((prev) => ({
+        ...prev,
+        fileName: profile.resumeOriginalName,
+        resumeUrl: profile.resumeFileName
+          ? `${API_BASE}/uploads/resumes/${profile.resumeFileName}`
+          : prev.resumeUrl,
+      }));
     }
-  };
+  }, [profile.resumeOriginalName, profile.resumeFileName]);
 
+  // ---------- Validation ----------
   useEffect(() => {
     const newErrors = {};
 
-    // Name validation
     if (touched.name || formData.name.length > 0) {
-      if (!formData.name.trim()) {
-        newErrors.name = 'Full name is required';
-      }
+      if (!formData.name.trim()) newErrors.name = 'Full name is required';
     }
 
-    // Branch validation
     if (touched.branch || formData.branch) {
-      if (!formData.branch) {
-        newErrors.branch = 'Academic branch is required';
-      }
+      if (!formData.branch) newErrors.branch = 'Academic branch is required';
     }
 
-    // CGPA validation (0 to 10)
     if (touched.cgpa || formData.cgpa.length > 0) {
       const parsed = parseFloat(formData.cgpa);
       if (!formData.cgpa) {
@@ -75,21 +99,20 @@ export default function ProfilePage() {
       }
     }
 
-    // Skills validation (must have at least one tag)
     if (touched.skills || formData.skills.length >= 0) {
       if (!formData.skills || formData.skills.length === 0) {
         newErrors.skills = 'Please add at least one verified skill tag';
       }
     }
 
-    // Resume Link validation
-    if (touched.resumeLink || formData.resumeLink.length > 0) {
-      if (!formData.resumeLink.trim()) {
-        newErrors.resumeLink = 'Resume URL link is required';
-      } else if (!isValidUrl(formData.resumeLink)) {
-        newErrors.resumeLink = 'Please enter a valid URL (e.g. https://drive.google.com/...)';
+    // Per-row link URL validation
+    const linkErrors = {};
+    formData.links.forEach((link, i) => {
+      if (link.url && !isValidUrl(link.url)) {
+        linkErrors[i] = 'Please enter a valid URL (https://...)';
       }
-    }
+    });
+    if (Object.keys(linkErrors).length > 0) newErrors.links = linkErrors;
 
     setErrors(newErrors);
   }, [formData, touched]);
@@ -102,43 +125,94 @@ export default function ProfilePage() {
     parseFloat(formData.cgpa) >= 0 &&
     parseFloat(formData.cgpa) <= 10 &&
     formData.skills.length > 0 &&
-    formData.resumeLink.trim() !== '' &&
-    isValidUrl(formData.resumeLink) &&
+    !errors.links &&
     Object.keys(errors).length === 0;
 
-  const handleBlur = (field) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-  };
+  const handleBlur = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
 
   const handleSkillsChange = (newSkills) => {
     setFormData((prev) => ({ ...prev, skills: newSkills }));
     setTouched((prev) => ({ ...prev, skills: true }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setTouched({
-      name: true,
-      branch: true,
-      cgpa: true,
-      skills: true,
-      resumeLink: true,
+  // ---------- Resume Upload ----------
+  const handleResumeChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setResumeState({ uploading: true, fileName: null, resumeUrl: null, error: null });
+
+    const formPayload = new FormData();
+    formPayload.append('resume', file);
+
+    try {
+      const token = localStorage.getItem('placementpulse_token');
+      const res = await fetch(`${API_BASE}/api/users/resume`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        // NOTE: do NOT set Content-Type — browser sets multipart boundary automatically
+        body: formPayload,
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResumeState({
+          uploading: false,
+          fileName: data.originalName,
+          resumeUrl: `${API_BASE}${data.resumeUrl}`,
+          error: null,
+        });
+      } else {
+        setResumeState({ uploading: false, fileName: null, resumeUrl: null, error: data.message || 'Upload failed' });
+      }
+    } catch {
+      setResumeState({ uploading: false, fileName: null, resumeUrl: null, error: 'Unable to reach server. Is the backend running?' });
+    }
+
+    // Reset the file input so the same file can be re-uploaded after an error
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // ---------- Links ----------
+  const addLink = () => {
+    setFormData((prev) => ({ ...prev, links: [...prev.links, { label: '', url: '' }] }));
+  };
+
+  const updateLink = (index, field, value) => {
+    setFormData((prev) => {
+      const updated = prev.links.map((l, i) => (i === index ? { ...l, [field]: value } : l));
+      return { ...prev, links: updated };
     });
+    setTouched((prev) => ({ ...prev, links: true }));
+  };
+
+  const removeLink = (index) => {
+    setFormData((prev) => ({ ...prev, links: prev.links.filter((_, i) => i !== index) }));
+  };
+
+  // ---------- Submit ----------
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setTouched({ name: true, branch: true, cgpa: true, skills: true, links: true });
 
     if (!isFormValid) return;
 
-    updateProfile({
+    setIsSaving(true);
+    const result = await updateProfile({
       name: formData.name.trim(),
       branch: formData.branch,
       cgpa: parseFloat(formData.cgpa),
       skills: formData.skills,
-      resumeLink: formData.resumeLink.trim(),
       phone: formData.phone.trim(),
       rollNo: formData.rollNo.trim(),
       bio: formData.bio.trim(),
+      links: formData.links.filter((l) => l.label.trim() || l.url.trim()), // omit fully empty rows
     });
+    setIsSaving(false);
 
-    setIsEditing(false);
+    if (result?.success) {
+      setIsEditing(false);
+    }
+    // On failure: updateProfile already showed a toast — nothing more to do here
   };
 
   return (
@@ -340,42 +414,65 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Resume Link */}
+          {/* Resume Upload */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-              Verified Master Resume Link *
-            </label>
-            <div className="relative">
-              <Link2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+            <p className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Verified Master Resume (PDF, max 5 MB)
+            </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              {/* Hidden file input */}
               <input
-                type="url"
-                disabled={!isEditing}
-                value={formData.resumeLink}
-                onChange={(e) => setFormData({ ...formData, resumeLink: e.target.value })}
-                onBlur={() => handleBlur('resumeLink')}
-                placeholder="https://drive.google.com/file/d/..."
-                className={`w-full pl-10 pr-20 py-2.5 rounded-xl border text-sm transition-all focus:outline-none ${
-                  !isEditing
-                    ? 'bg-slate-50/70 border-slate-200 text-slate-800'
-                    : touched.resumeLink && errors.resumeLink
-                    ? 'border-rose-300 ring-2 ring-rose-50 bg-rose-50/20'
-                    : 'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100'
-                }`}
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={handleResumeChange}
+                disabled={!isEditing || resumeState.uploading}
+                id="resume-file-input"
               />
-              {formData.resumeLink && (
-                <a
-                  href={formData.resumeLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute right-3 top-2.5 text-xs font-bold text-brand-600 hover:text-brand-800 flex items-center gap-1 bg-brand-50 px-2 py-1 rounded-lg"
-                >
-                  Preview <ExternalLink className="w-3 h-3" />
-                </a>
+
+              {/* Upload trigger button */}
+              <label
+                htmlFor="resume-file-input"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  !isEditing || resumeState.uploading
+                    ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                    : 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100 cursor-pointer'
+                }`}
+              >
+                {resumeState.uploading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                {resumeState.uploading ? 'Uploading...' : 'Upload PDF'}
+              </label>
+
+              {/* Uploaded file info or placeholder */}
+              {resumeState.fileName ? (
+                <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                  <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="font-medium truncate max-w-[200px]">{resumeState.fileName}</span>
+                  {resumeState.resumeUrl && (
+                    <a
+                      href={resumeState.resumeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 flex items-center gap-1 font-bold text-brand-600 hover:text-brand-800"
+                    >
+                      View <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs text-slate-400 italic">No resume uploaded yet</span>
               )}
             </div>
-            {touched.resumeLink && errors.resumeLink && (
+
+            {/* Upload error */}
+            {resumeState.error && (
               <p className="flex items-center gap-1 text-xs text-rose-500 font-medium mt-1.5">
-                <AlertCircle className="w-3.5 h-3.5" /> {errors.resumeLink}
+                <AlertCircle className="w-3.5 h-3.5" /> {resumeState.error}
               </p>
             )}
           </div>
@@ -415,6 +512,84 @@ export default function ProfilePage() {
             />
           </div>
 
+          {/* Links Section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Profile Links (LinkedIn, GitHub, Portfolio…)
+              </p>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={addLink}
+                  className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-2.5 py-1 rounded-lg transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Link
+                </button>
+              )}
+            </div>
+
+            {formData.links.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No links added yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {formData.links.map((link, i) => (
+                  <div key={i} className="flex flex-col sm:flex-row gap-2">
+                    {/* Label */}
+                    <input
+                      type="text"
+                      disabled={!isEditing}
+                      value={link.label}
+                      onChange={(e) => updateLink(i, 'label', e.target.value)}
+                      placeholder='e.g. "LinkedIn"'
+                      className={`w-full sm:w-36 px-3 py-2 rounded-xl border text-sm focus:outline-none transition-all ${
+                        !isEditing
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800'
+                          : 'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100'
+                      }`}
+                    />
+                    {/* URL */}
+                    <div className="flex-1 flex flex-col gap-1">
+                      <div className="relative">
+                        <Link2 className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          disabled={!isEditing}
+                          value={link.url}
+                          onChange={(e) => updateLink(i, 'url', e.target.value)}
+                          placeholder="https://..."
+                          className={`w-full pl-9 pr-4 py-2 rounded-xl border text-sm focus:outline-none transition-all ${
+                            !isEditing
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800'
+                              : errors.links?.[i]
+                              ? 'border-rose-300 ring-2 ring-rose-50 bg-rose-50/20'
+                              : 'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100'
+                          }`}
+                        />
+                      </div>
+                      {errors.links?.[i] && (
+                        <p className="flex items-center gap-1 text-xs text-rose-500 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5" /> {errors.links[i]}
+                        </p>
+                      )}
+                    </div>
+                    {/* Remove button */}
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => removeLink(i)}
+                        className="self-start sm:self-center p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition-colors"
+                        title="Remove link"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Action Save Bar */}
           {isEditing && (
             <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -440,15 +615,19 @@ export default function ProfilePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!isFormValid}
+                  disabled={!isFormValid || isSaving}
                   className={`w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md ${
-                    isFormValid
+                    isFormValid && !isSaving
                       ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand-500/25 cursor-pointer'
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                   }`}
                 >
-                  <Save className="w-3.5 h-3.5" />
-                  Save Profile Changes
+                  {isSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  {isSaving ? 'Saving...' : 'Save Profile Changes'}
                 </button>
               </div>
             </div>

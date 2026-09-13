@@ -222,12 +222,30 @@ export function PlacementProvider({ children }) {
     return newDrive;
   };
 
-  const updateProfile = (updatedFields) => {
-    setProfile((prev) => {
-      const next = { ...prev, ...updatedFields };
-      return next;
-    });
-    showToast('Profile updated successfully!', 'success');
+  const updateProfile = async (updatedFields) => {
+    try {
+      const token = localStorage.getItem('placementpulse_token');
+      const res = await fetch('http://localhost:5000/api/users/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatedFields),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setProfile((prev) => ({ ...prev, ...data.user }));
+        showToast('Profile updated successfully!', 'success');
+        return { success: true };
+      } else {
+        showToast(data.message || 'Failed to update profile', 'error');
+        return { success: false, message: data.message };
+      }
+    } catch (err) {
+      showToast('Unable to reach server. Is the backend running?', 'error');
+      return { success: false, message: 'Network error' };
+    }
   };
 
   const addSkillToProfile = (skillName) => {
