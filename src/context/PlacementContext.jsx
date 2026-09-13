@@ -28,10 +28,17 @@ const getDefaultProfile = (currUser) => {
   return INITIAL_STUDENT_PROFILE;
 };
 
+const getDefaultApplications = (currUser) => {
+  if (currUser?.id) {
+    return [];
+  }
+  return INITIAL_APPLICATIONS;
+};
+
 export function PlacementProvider({ children }) {
   const { user } = useAuth();
 
-  // Drives
+  // Drives (Global/Shared)
   const [drives, setDrives] = useState(() => {
     const saved = localStorage.getItem('placementpulse_drives');
     if (saved) {
@@ -58,9 +65,10 @@ export function PlacementProvider({ children }) {
     return getDefaultProfile(user);
   });
 
-  // Applications submitted by student
+  // Applications submitted by student (User-scoped)
   const [applications, setApplications] = useState(() => {
-    const saved = localStorage.getItem('placementpulse_applications');
+    const key = user?.id ? `placementpulse_applications_${user.id}` : 'placementpulse_applications';
+    const saved = localStorage.getItem(key);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -68,7 +76,7 @@ export function PlacementProvider({ children }) {
         console.error(e);
       }
     }
-    return INITIAL_APPLICATIONS;
+    return getDefaultApplications(user);
   });
 
   // Toast notifications
@@ -108,9 +116,25 @@ export function PlacementProvider({ children }) {
     localStorage.setItem(key, JSON.stringify(profile));
   }, [profile, user?.id]);
 
+  // Re-load applications whenever user?.id changes
   useEffect(() => {
-    localStorage.setItem('placementpulse_applications', JSON.stringify(applications));
-  }, [applications]);
+    const key = user?.id ? `placementpulse_applications_${user.id}` : 'placementpulse_applications';
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        setApplications(JSON.parse(saved));
+        return;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setApplications(getDefaultApplications(user));
+  }, [user?.id]);
+
+  useEffect(() => {
+    const key = user?.id ? `placementpulse_applications_${user.id}` : 'placementpulse_applications';
+    localStorage.setItem(key, JSON.stringify(applications));
+  }, [applications, user?.id]);
 
   const getDriveById = (id) => {
     return drives.find((d) => d.id === id) || null;
