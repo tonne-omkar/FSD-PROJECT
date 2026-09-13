@@ -7,6 +7,8 @@ import fs from 'fs';
 import connectDB from './config/db.js';
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
+import drivesRoutes from './routes/drives.js';
+import applicationsRoutes from './routes/applications.js';
 
 dotenv.config();
 
@@ -33,6 +35,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/drives', drivesRoutes);
+app.use('/api/applications', applicationsRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
