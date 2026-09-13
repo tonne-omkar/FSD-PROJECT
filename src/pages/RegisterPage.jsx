@@ -91,8 +91,8 @@ export default function RegisterPage() {
         const parsed = parseFloat(formData.cgpa);
         if (!formData.cgpa) {
           newErrors.cgpa = 'CGPA is required';
-        } else if (isNaN(parsed) || parsed < 0 || parsed > 10) {
-          newErrors.cgpa = 'CGPA must be a valid number between 0.0 and 10.0';
+        } else if (isNaN(parsed) || parsed < 1 || parsed > 10) {
+          newErrors.cgpa = 'CGPA must be a valid number between 1.0 and 10.0';
         }
       }
     }
@@ -128,7 +128,7 @@ export default function RegisterPage() {
     if (role === 'student') {
       if (!formData.branch) return false;
       const parsed = parseFloat(formData.cgpa);
-      if (!formData.cgpa || isNaN(parsed) || parsed < 0 || parsed > 10) return false;
+      if (!formData.cgpa || isNaN(parsed) || parsed < 1 || parsed > 10) return false;
     }
 
     if (role === 'recruiter') {
@@ -440,17 +440,21 @@ export default function RegisterPage() {
               {/* CGPA */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Current CGPA (0.0 - 10.0) *
+                  Current CGPA (1.0 - 10.0) *
                 </label>
                 <div className="relative">
                   <Award className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                   <input
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="1"
                     max="10"
                     value={formData.cgpa}
-                    onChange={(e) => handleChange('cgpa', e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val !== '' && parseFloat(val) > 10) return;
+                      handleChange('cgpa', val);
+                    }}
                     onBlur={() => handleBlur('cgpa')}
                     placeholder="e.g. 8.75"
                     className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all focus:outline-none ${
