@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { PlacementProvider } from './context/PlacementContext';
 import Layout from './components/common/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import Toast from './components/common/Toast';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -54,6 +55,7 @@ export default function App() {
               </Route>
             </Route>
           </Routes>
+          <Toast />
         </PlacementProvider>
       </AuthProvider>
     </BrowserRouter>
