@@ -9,7 +9,7 @@ const router = express.Router();
 // @desc    Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role, branch, cgpa } = req.body;
+    const { name, email, password, role, branch, cgpa, company, designation } = req.body;
 
     // Validation: name, email, password, role are required
     if (!name || !email || !password || !role) {
@@ -66,6 +66,8 @@ router.post('/register', async (req, res) => {
       role,
       branch: role === 'student' ? branch : undefined,
       cgpa: role === 'student' ? cgpa : undefined,
+      company: role === 'recruiter' ? company : undefined,
+      designation: role === 'tpo' ? designation : undefined,
     });
 
     // Generate JWT expiring in 7 days
@@ -86,6 +88,8 @@ router.post('/register', async (req, res) => {
         role: user.role,
         branch: user.branch,
         cgpa: user.cgpa,
+        company: user.company,
+        designation: user.designation,
       },
     });
   } catch (error) {
@@ -146,6 +150,8 @@ router.post('/login', async (req, res) => {
         role: user.role,
         branch: user.branch,
         cgpa: user.cgpa,
+        company: user.company,
+        designation: user.designation,
       },
     });
   } catch (error) {

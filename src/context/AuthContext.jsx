@@ -90,6 +90,8 @@ export function AuthProvider({ children }) {
           role: userData.role,
           branch: userData.branch,
           cgpa: userData.cgpa,
+          company: userData.company,
+          designation: userData.designation,
         }),
       });
       const data = await res.json();

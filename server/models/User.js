@@ -26,6 +26,12 @@ const userSchema = new mongoose.Schema(
     cgpa: {
       type: Number,
     },
+    company: {
+      type: String,
+    },
+    designation: {
+      type: String,
+    },
     skills: {
       type: [String],
       default: [],

@@ -10,6 +10,7 @@ import {
   AlertCircle,
   CheckCircle2,
   ShieldCheck,
+  Building2,
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
@@ -22,7 +23,7 @@ export default function RegisterPage() {
   const { showToast } = usePlacement();
   const navigate = useNavigate();
 
-  const [role, setRole] = useState('student'); // 'student' | 'tpo'
+  const [role, setRole] = useState('student'); // 'student' | 'tpo' | 'recruiter'
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -31,6 +32,7 @@ export default function RegisterPage() {
     branch: 'CSE',
     cgpa: '8.5',
     designation: 'Placement Officer',
+    company: '',
   });
 
   const [touched, setTouched] = useState({});
@@ -95,6 +97,24 @@ export default function RegisterPage() {
       }
     }
 
+    // Recruiter-specific field: Company
+    if (role === 'recruiter') {
+      if (touched.company || formData.company.length > 0) {
+        if (!formData.company.trim()) {
+          newErrors.company = 'Company name is required';
+        }
+      }
+    }
+
+    // TPO-specific field: Designation
+    if (role === 'tpo') {
+      if (touched.designation || formData.designation.length > 0) {
+        if (!formData.designation.trim()) {
+          newErrors.designation = 'Designation is required';
+        }
+      }
+    }
+
     setErrors(newErrors);
   }, [formData, touched, role]);
 
@@ -109,6 +129,14 @@ export default function RegisterPage() {
       if (!formData.branch) return false;
       const parsed = parseFloat(formData.cgpa);
       if (!formData.cgpa || isNaN(parsed) || parsed < 0 || parsed > 10) return false;
+    }
+
+    if (role === 'recruiter') {
+      if (!formData.company.trim()) return false;
+    }
+
+    if (role === 'tpo') {
+      if (!formData.designation.trim()) return false;
     }
 
     return Object.keys(errors).length === 0;
@@ -133,6 +161,8 @@ export default function RegisterPage() {
       confirmPassword: true,
       branch: true,
       cgpa: true,
+      company: true,
+      designation: true,
     };
     setTouched(allTouched);
 
@@ -148,15 +178,33 @@ export default function RegisterPage() {
       role: role,
       branch: role === 'student' ? formData.branch : undefined,
       cgpa: role === 'student' ? parseFloat(formData.cgpa) : undefined,
+      company: role === 'recruiter' ? formData.company.trim() : undefined,
+      designation: role === 'tpo' ? formData.designation.trim() : undefined,
     });
 
     if (result.success) {
-      showToast(`Account registered successfully as ${result.user?.role === 'student' ? 'Student' : 'TPO Officer'}!`, 'success');
-      const dest = { student: '/student/dashboard', tpo: '/tpo/dashboard', recruiter: '/recruiter/dashboard' };
+      const roleLabel =
+        result.user?.role === 'student'
+          ? 'Student'
+          : result.user?.role === 'tpo'
+          ? 'TPO Officer'
+          : 'Recruiter';
+      showToast(`Account registered successfully as ${roleLabel}!`, 'success');
+      const dest = {
+        student: '/student/dashboard',
+        tpo: '/tpo/dashboard',
+        recruiter: '/recruiter/dashboard',
+      };
       navigate(dest[result.user?.role] || '/student/dashboard');
     } else {
       showToast(result.message || 'Registration failed', 'error');
     }
+  };
+
+  const getRoleLabel = () => {
+    if (role === 'student') return 'Student';
+    if (role === 'tpo') return 'TPO';
+    return 'Recruiter';
   };
 
   return (
@@ -167,12 +215,14 @@ export default function RegisterPage() {
           <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
             <UserPlus className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Create PlacementPulse Account</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+            Create PlacementPulse Account
+          </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Join the automated campus placement ecosystem
           </p>
 
-          {/* Role Toggle */}
+          {/* Role Toggle Tabs */}
           <div className="mt-6 p-1 bg-slate-100 rounded-2xl flex items-center gap-1 border border-slate-200/80">
             <button
               type="button"
@@ -180,14 +230,14 @@ export default function RegisterPage() {
                 setRole('student');
                 setTouched({});
               }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 role === 'student'
                   ? 'bg-white text-brand-700 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <GraduationCap className="w-4 h-4" />
-              Student Registration
+              Student
             </button>
             <button
               type="button"
@@ -195,14 +245,29 @@ export default function RegisterPage() {
                 setRole('tpo');
                 setTouched({});
               }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 role === 'tpo'
                   ? 'bg-white text-purple-700 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
-              TPO Cell Registration
+              TPO Cell
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRole('recruiter');
+                setTouched({});
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                role === 'recruiter'
+                  ? 'bg-white text-emerald-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              Recruiter
             </button>
           </div>
         </div>
@@ -221,7 +286,13 @@ export default function RegisterPage() {
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
                 onBlur={() => handleBlur('name')}
-                placeholder={role === 'student' ? 'e.g. Omkar Sharma' : 'e.g. Dr. Rajesh Verma'}
+                placeholder={
+                  role === 'student'
+                    ? 'e.g. Omkar Sharma'
+                    : role === 'tpo'
+                    ? 'e.g. Dr. Rajesh Verma'
+                    : 'e.g. Sarah Jenkins'
+                }
                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all focus:outline-none ${
                   touched.name && errors.name
                     ? 'border-rose-300 ring-2 ring-rose-50 bg-rose-50/20'
@@ -242,7 +313,7 @@ export default function RegisterPage() {
           {/* Email */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-              College Email Address *
+              {role === 'recruiter' ? 'Corporate Email Address *' : 'College Email Address *'}
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -251,7 +322,13 @@ export default function RegisterPage() {
                 value={formData.email}
                 onChange={(e) => handleChange('email', e.target.value)}
                 onBlur={() => handleBlur('email')}
-                placeholder={role === 'student' ? 'student.id@campus.edu' : 'tpo.cell@campus.edu'}
+                placeholder={
+                  role === 'student'
+                    ? 'student.id@campus.edu'
+                    : role === 'tpo'
+                    ? 'tpo.cell@campus.edu'
+                    : 'sarah.j@google.com'
+                }
                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all focus:outline-none ${
                   touched.email && errors.email
                     ? 'border-rose-300 ring-2 ring-rose-50 bg-rose-50/20'
@@ -332,8 +409,8 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Student Specific Fields: Branch & CGPA */}
-          {role === 'student' ? (
+          {/* Role-Specific Fields */}
+          {role === 'student' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               {/* Branch */}
               <div>
@@ -393,12 +470,67 @@ export default function RegisterPage() {
                 )}
               </div>
             </div>
-          ) : (
-            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
-              <span>
-                Registering as university <strong>Training & Placement Officer</strong>. Grants authority to create drives and analyze cohort metrics.
-              </span>
+          )}
+
+          {role === 'recruiter' && (
+            <div className="pt-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                Company Name *
+              </label>
+              <div className="relative">
+                <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  value={formData.company}
+                  onChange={(e) => handleChange('company', e.target.value)}
+                  onBlur={() => handleBlur('company')}
+                  placeholder="e.g. Google, Microsoft, Amazon"
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all focus:outline-none ${
+                    touched.company && errors.company
+                      ? 'border-rose-300 ring-2 ring-rose-50 bg-rose-50/20'
+                      : touched.company && !errors.company && formData.company
+                      ? 'border-emerald-300 ring-1 ring-emerald-50'
+                      : 'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100'
+                  }`}
+                />
+              </div>
+              {touched.company && errors.company && (
+                <p className="flex items-center gap-1 text-xs text-rose-500 font-medium mt-1.5 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{errors.company}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {role === 'tpo' && (
+            <div className="pt-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                Designation / Title *
+              </label>
+              <div className="relative">
+                <ShieldCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  value={formData.designation}
+                  onChange={(e) => handleChange('designation', e.target.value)}
+                  onBlur={() => handleBlur('designation')}
+                  placeholder="e.g. Head of Placement Cell"
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all focus:outline-none ${
+                    touched.designation && errors.designation
+                      ? 'border-rose-300 ring-2 ring-rose-50 bg-rose-50/20'
+                      : touched.designation && !errors.designation && formData.designation
+                      ? 'border-emerald-300 ring-1 ring-emerald-50'
+                      : 'border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100'
+                  }`}
+                />
+              </div>
+              {touched.designation && errors.designation && (
+                <p className="flex items-center gap-1 text-xs text-rose-500 font-medium mt-1.5 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{errors.designation}</span>
+                </p>
+              )}
             </div>
           )}
 
@@ -413,7 +545,7 @@ export default function RegisterPage() {
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
               }`}
             >
-              <span>Complete Registration as {role === 'student' ? 'Student' : 'TPO'}</span>
+              <span>Complete Registration as {getRoleLabel()}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
             {!isFormValid && (
