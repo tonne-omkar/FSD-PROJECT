@@ -44,8 +44,14 @@ export default function ApplyDrivePage() {
   const [errors, setErrors] = useState({});
   const [submittedApp, setSubmittedApp] = useState(null);
 
-  // URL regex validation
-  const urlRegex = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i;
+  const isValidUrl = (value) => {
+    try {
+      const url = new URL(value.trim());
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     const newErrors = {};
@@ -63,7 +69,7 @@ export default function ApplyDrivePage() {
     if (touched.resumeLink || formData.resumeLink.length > 0) {
       if (!formData.resumeLink.trim()) {
         newErrors.resumeLink = 'Resume URL link is required';
-      } else if (!urlRegex.test(formData.resumeLink.trim())) {
+      } else if (!isValidUrl(formData.resumeLink)) {
         newErrors.resumeLink = 'Please provide a valid URL (e.g. https://drive.google.com/... or https://linkedin.com/...)';
       }
     }
@@ -121,7 +127,7 @@ export default function ApplyDrivePage() {
   const isFormValid =
     formData.coverLetter.trim().length >= 50 &&
     formData.resumeLink.trim() !== '' &&
-    urlRegex.test(formData.resumeLink.trim()) &&
+    isValidUrl(formData.resumeLink) &&
     formData.confirmEligibility === true &&
     Object.keys(errors).length === 0;
 

@@ -10,10 +10,13 @@ export const protect = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET || 'placementpulse_secret_key_123'
-      );
+
+      if (!process.env.JWT_SECRET) {
+        console.error('FATAL: JWT_SECRET environment variable is not set');
+        return res.status(500).json({ message: 'Server configuration error' });
+      }
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       req.user = await User.findById(decoded.id).select('-passwordHash');
 
