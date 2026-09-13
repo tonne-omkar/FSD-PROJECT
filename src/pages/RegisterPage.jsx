@@ -122,7 +122,7 @@ export default function RegisterPage() {
     setFormData((prev) => ({ ...prev, [field]: val }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Mark all as touched
@@ -141,7 +141,7 @@ export default function RegisterPage() {
     }
 
     // Create user via context
-    register({
+    const result = await register({
       name: formData.name.trim(),
       email: formData.email.trim(),
       password: formData.password,
@@ -150,12 +150,12 @@ export default function RegisterPage() {
       cgpa: role === 'student' ? parseFloat(formData.cgpa) : undefined,
     });
 
-    showToast(`Account registered successfully as ${role === 'student' ? 'Student' : 'TPO Officer'}!`, 'success');
-
-    if (role === 'student') {
-      navigate('/student/dashboard');
+    if (result.success) {
+      showToast(`Account registered successfully as ${result.user?.role === 'student' ? 'Student' : 'TPO Officer'}!`, 'success');
+      const dest = { student: '/student/dashboard', tpo: '/tpo/dashboard', recruiter: '/recruiter/dashboard' };
+      navigate(dest[result.user?.role] || '/student/dashboard');
     } else {
-      navigate('/tpo/dashboard');
+      showToast(result.message || 'Registration failed', 'error');
     }
   };
 

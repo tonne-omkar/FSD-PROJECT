@@ -102,7 +102,7 @@ export default function LoginPage() {
     setErrors({});
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setTouched({ email: true, password: true });
     const submitErrors = {};
@@ -112,10 +112,14 @@ export default function LoginPage() {
     else if (formData.password.length < 6) submitErrors.password = 'Minimum 6 characters';
     if (Object.keys(submitErrors).length > 0) { setErrors(submitErrors); return; }
 
-    login(formData.email, formData.password, selectedRole);
-    showToast(`Welcome! Signed in as ${role.label}.`, 'success');
-    const dest = { student: '/student/dashboard', tpo: '/tpo/dashboard', recruiter: '/recruiter/dashboard' };
-    navigate(dest[selectedRole]);
+    const result = await login(formData.email, formData.password);
+    if (result.success) {
+      showToast(`Welcome! Signed in successfully.`, 'success');
+      const dest = { student: '/student/dashboard', tpo: '/tpo/dashboard', recruiter: '/recruiter/dashboard' };
+      navigate(dest[result.user?.role] || '/student/dashboard');
+    } else {
+      showToast(result.message || 'Invalid email or password', 'error');
+    }
   };
 
   return (

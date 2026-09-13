@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+const API_BASE_URL = 'http://localhost:5000/api';
+
 const AuthContext = createContext(null);
 
 const DEFAULT_USERS = {
@@ -53,37 +55,61 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  const login = (email, password, role = 'student') => {
-    const baseUser = DEFAULT_USERS[role] || DEFAULT_USERS.student;
-    const authenticatedUser = {
-      ...baseUser,
-      email: email.trim(),
-      role: role,
-    };
-    setUser(authenticatedUser);
-    return authenticatedUser;
+  const login = async (email, password) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem('placementpulse_token', data.token);
+        setUser(data.user);
+        return { success: true, user: data.user };
+      }
+      return { success: false, message: data.message || 'Login failed' };
+    } catch (err) {
+      console.error('Network/login error:', err);
+      return {
+        success: false,
+        message: 'Unable to reach server. Is the backend running?',
+      };
+    }
   };
 
-  const register = (userData) => {
-    const newUser = {
-      id: `usr-${Date.now()}`,
-      name: userData.name,
-      email: userData.email,
-      role: userData.role || 'student',
-      branch: userData.branch || 'CSE',
-      cgpa: userData.cgpa ? parseFloat(userData.cgpa) : 8.0,
-      avatar: (userData.name || 'User')
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase(),
-    };
-    setUser(newUser);
-    return newUser;
+  const register = async (userData) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: userData.name,
+          email: userData.email,
+          password: userData.password,
+          role: userData.role,
+          branch: userData.branch,
+          cgpa: userData.cgpa,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem('placementpulse_token', data.token);
+        setUser(data.user);
+        return { success: true, user: data.user };
+      }
+      return { success: false, message: data.message || 'Registration failed' };
+    } catch (err) {
+      console.error('Network/register error:', err);
+      return {
+        success: false,
+        message: 'Unable to reach server. Is the backend running?',
+      };
+    }
   };
 
   const logout = () => {
+    localStorage.removeItem('placementpulse_token');
     setUser(null);
   };
 
