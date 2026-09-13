@@ -5,10 +5,32 @@ import {
   INITIAL_APPLICATIONS,
   TPO_STATS,
 } from '../mock/mockData';
+import { useAuth } from './AuthContext';
 
 const PlacementContext = createContext(null);
 
+const getDefaultProfile = (currUser) => {
+  if (currUser?.id) {
+    return {
+      name: currUser?.name || '',
+      email: currUser?.email || '',
+      role: currUser?.role || 'student',
+      branch: currUser?.branch || '',
+      cgpa: currUser?.cgpa || '',
+      skills: currUser?.skills || [],
+      resumeLink: '',
+      phone: '',
+      rollNo: '',
+      graduationYear: '',
+      bio: '',
+    };
+  }
+  return INITIAL_STUDENT_PROFILE;
+};
+
 export function PlacementProvider({ children }) {
+  const { user } = useAuth();
+
   // Drives
   const [drives, setDrives] = useState(() => {
     const saved = localStorage.getItem('placementpulse_drives');
@@ -22,9 +44,10 @@ export function PlacementProvider({ children }) {
     return INITIAL_DRIVES;
   });
 
-  // Student Profile
+  // Student Profile (User-scoped)
   const [profile, setProfile] = useState(() => {
-    const saved = localStorage.getItem('placementpulse_profile');
+    const key = user?.id ? `placementpulse_profile_${user.id}` : 'placementpulse_profile';
+    const saved = localStorage.getItem(key);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -32,7 +55,7 @@ export function PlacementProvider({ children }) {
         console.error(e);
       }
     }
-    return INITIAL_STUDENT_PROFILE;
+    return getDefaultProfile(user);
   });
 
   // Applications submitted by student
@@ -65,9 +88,25 @@ export function PlacementProvider({ children }) {
     localStorage.setItem('placementpulse_drives', JSON.stringify(drives));
   }, [drives]);
 
+  // Re-load profile whenever user?.id changes (e.g. login/switch user)
   useEffect(() => {
-    localStorage.setItem('placementpulse_profile', JSON.stringify(profile));
-  }, [profile]);
+    const key = user?.id ? `placementpulse_profile_${user.id}` : 'placementpulse_profile';
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        setProfile(JSON.parse(saved));
+        return;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setProfile(getDefaultProfile(user));
+  }, [user?.id]);
+
+  useEffect(() => {
+    const key = user?.id ? `placementpulse_profile_${user.id}` : 'placementpulse_profile';
+    localStorage.setItem(key, JSON.stringify(profile));
+  }, [profile, user?.id]);
 
   useEffect(() => {
     localStorage.setItem('placementpulse_applications', JSON.stringify(applications));

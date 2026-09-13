@@ -25,9 +25,9 @@ export default function ProfilePage() {
   const { profile, updateProfile, applications } = usePlacement();
 
   const [formData, setFormData] = useState({
-    name: profile.name || user?.name || '',
-    branch: profile.branch || user?.branch || 'CSE',
-    cgpa: (profile.cgpa ?? user?.cgpa ?? 8.8).toString(),
+    name: user?.name || profile.name || '',
+    branch: user?.branch || profile.branch || 'CSE',
+    cgpa: (user?.cgpa ?? profile.cgpa ?? 8.8).toString(),
     skills: profile.skills || ['React', 'JavaScript', 'Node.js', 'Python'],
     resumeLink: profile.resumeLink || '',
     phone: profile.phone || '+91 98765 43210',
