@@ -15,6 +15,7 @@ import TPODashboardPage from './pages/TPODashboardPage';
 import RecruiterDashboardPage from './pages/RecruiterDashboardPage';
 import DriveDetailsPage from './pages/DriveDetailsPage';
 import ApplyDrivePage from './pages/ApplyDrivePage';
+import TPODriveApplicantsPage from './pages/TPODriveApplicantsPage';
 import ProfilePage from './pages/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -39,6 +40,7 @@ export default function App() {
 
                 {/* TPO routes */}
                 <Route path="/tpo/dashboard" element={<TPODashboardPage />} />
+                <Route path="/tpo/drives/:id/applicants" element={<TPODriveApplicantsPage />} />
 
                 {/* Recruiter routes */}
                 <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />

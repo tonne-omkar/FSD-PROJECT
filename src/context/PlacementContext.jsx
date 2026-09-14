@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
-  INITIAL_DRIVES,
   INITIAL_STUDENT_PROFILE,
-  INITIAL_APPLICATIONS,
   TPO_STATS,
 } from '../mock/mockData';
 import { useAuth } from './AuthContext';
@@ -28,56 +26,17 @@ const getDefaultProfile = (currUser) => {
   return INITIAL_STUDENT_PROFILE;
 };
 
-const getDefaultApplications = (currUser) => {
-  if (currUser?.id) {
-    return [];
-  }
-  return INITIAL_APPLICATIONS;
-};
-
 export function PlacementProvider({ children }) {
   const { user } = useAuth();
 
-  // Drives (Global/Shared)
-  const [drives, setDrives] = useState(() => {
-    const saved = localStorage.getItem('placementpulse_drives');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return INITIAL_DRIVES;
-  });
+  // Drives (Backend-synced)
+  const [drives, setDrives] = useState([]);
+
+  // Applications (Backend-synced, role-scoped)
+  const [applications, setApplications] = useState([]);
 
   // Student Profile (User-scoped)
-  const [profile, setProfile] = useState(() => {
-    const key = user?.id ? `placementpulse_profile_${user.id}` : 'placementpulse_profile';
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return getDefaultProfile(user);
-  });
-
-  // Applications submitted by student (User-scoped)
-  const [applications, setApplications] = useState(() => {
-    const key = user?.id ? `placementpulse_applications_${user.id}` : 'placementpulse_applications';
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return getDefaultApplications(user);
-  });
+  const [profile, setProfile] = useState(() => getDefaultProfile(user));
 
   // Toast notifications
   const [toast, setToast] = useState(null);
@@ -91,12 +50,58 @@ export function PlacementProvider({ children }) {
 
   const closeToast = () => setToast(null);
 
-  // Sync state to localStorage
-  useEffect(() => {
-    localStorage.setItem('placementpulse_drives', JSON.stringify(drives));
-  }, [drives]);
+  // Fetch drives from backend API
+  const fetchDrives = async () => {
+    try {
+      const token = localStorage.getItem('placementpulse_token');
+      if (!token) return;
+      const res = await fetch('http://localhost:5000/api/drives', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const normalized = data.map((d) => ({ ...d, id: d._id }));
+          setDrives(normalized);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching drives:', e);
+    }
+  };
 
-  // Re-load profile whenever user?.id changes (e.g. login/switch user)
+  // Fetch role-scoped applications from backend API
+  const fetchApplications = async () => {
+    try {
+      const token = localStorage.getItem('placementpulse_token');
+      if (!token) return;
+      const res = await fetch('http://localhost:5000/api/applications', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const normalized = data.map((a) => ({ ...a, driveId: a.drive?._id, id: a._id }));
+          setApplications(normalized);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching applications:', e);
+    }
+  };
+
+  // Trigger data fetch on login/logout/user change
+  useEffect(() => {
+    if (user?.id) {
+      fetchDrives();
+      fetchApplications();
+    } else {
+      setDrives([]);
+      setApplications([]);
+    }
+  }, [user?.id]);
+
+  // Re-load profile whenever user?.id changes
   useEffect(() => {
     const key = user?.id ? `placementpulse_profile_${user.id}` : 'placementpulse_profile';
     const saved = localStorage.getItem(key);
@@ -116,110 +121,66 @@ export function PlacementProvider({ children }) {
     localStorage.setItem(key, JSON.stringify(profile));
   }, [profile, user?.id]);
 
-  // Re-load applications whenever user?.id changes
-  useEffect(() => {
-    const key = user?.id ? `placementpulse_applications_${user.id}` : 'placementpulse_applications';
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setApplications(JSON.parse(saved));
-        return;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    setApplications(getDefaultApplications(user));
-  }, [user?.id]);
-
-  useEffect(() => {
-    const key = user?.id ? `placementpulse_applications_${user.id}` : 'placementpulse_applications';
-    localStorage.setItem(key, JSON.stringify(applications));
-  }, [applications, user?.id]);
-
   const getDriveById = (id) => {
-    return drives.find((d) => d.id === id) || null;
+    return drives.find((d) => d._id === id || d.id === id) || null;
   };
 
   const hasApplied = (driveId) => {
-    return applications.some((app) => app.driveId === driveId);
-  };
-
-  const applyToDrive = (driveId, applicationData) => {
-    const targetDrive = getDriveById(driveId);
-    if (!targetDrive) return null;
-
-    const newApp = {
-      id: `APP-2026-${Math.floor(100 + Math.random() * 900)}`,
-      driveId: driveId,
-      company: targetDrive.company,
-      role: targetDrive.role,
-      appliedDate: new Date().toISOString().split('T')[0],
-      status: 'Application Received',
-      statusColor: 'bg-blue-100 text-blue-800 border-blue-300',
-      coverLetter: applicationData.coverLetter,
-      resumeLink: applicationData.resumeLink,
-      currentRound: 'Round 1: Document & Profile Screening',
-    };
-
-    setApplications((prev) => [newApp, ...prev]);
-
-    // Update drive applicant count
-    setDrives((prev) =>
-      prev.map((d) =>
-        d.id === driveId ? { ...d, applicantsCount: (d.applicantsCount || 0) + 1 } : d
-      )
+    return applications.some(
+      (app) => app.drive === driveId || app.drive?._id === driveId || app.driveId === driveId
     );
-
-    showToast(`Application successfully submitted for ${targetDrive.company}!`, 'success');
-    return newApp;
   };
 
-  const postNewDrive = (driveData) => {
-    const newDrive = {
-      id: `drive-${Date.now()}`,
-      company: driveData.company,
-      badgeColor: 'from-brand-600 to-indigo-700',
-      role: driveData.role,
-      jobType: driveData.jobType || 'Full-time',
-      location: driveData.location || 'Pan India (Hybrid)',
-      ctc: `₹ ${parseFloat(driveData.ctcNumber).toFixed(1)} LPA`,
-      ctcNumber: parseFloat(driveData.ctcNumber) || 10,
-      minCgpa: parseFloat(driveData.minCgpa) || 7.0,
-      eligibleBranches: driveData.eligibleBranches || ['CSE', 'IT', 'ECE'],
-      deadline: driveData.deadline || '2026-10-31',
-      postedDate: new Date().toISOString().split('T')[0],
-      status: 'Active',
-      applicantsCount: 0,
-      shortlistedCount: 0,
-      placedCount: 0,
-      workMode: driveData.workMode || 'Hybrid',
-      bondPeriod: driveData.bondPeriod || 'None',
-      description: driveData.description || 'Exciting career opportunity posted by the campus TPO cell.',
-      responsibilities: driveData.responsibilities?.length
-        ? driveData.responsibilities
-        : ['Execute critical engineering deliverables', 'Collaborate with multidisciplinary squads', 'Maintain high engineering hygiene and tests'],
-      requirements: driveData.requirements?.length
-        ? driveData.requirements
-        : [`CGPA >= ${driveData.minCgpa}`, 'Strong fundamentals and problem solving attitude'],
-      skillsRequired: driveData.skillsRequired?.length
-        ? driveData.skillsRequired
-        : ['Problem Solving', 'Data Structures', 'Communication'],
-      recruitmentRounds: [
-        { round: 1, title: 'Campus Online Assessment', mode: 'Virtual / Lab', duration: '90 mins' },
-        { round: 2, title: 'Technical Interview', mode: 'Campus / Virtual', duration: '45 mins' },
-        { round: 3, title: 'HR & Cultural Alignment', mode: 'Campus / Virtual', duration: '30 mins' },
-      ],
-      perks: ['Health Insurance', 'Signing Bonus', 'Annual Incentive Program'],
-      aiInsights: {
-        matchScore: 88,
-        verdict: 'Newly published campus drive matching candidate profile',
-        keyStrengths: ['Fresh opportunity', 'Direct campus placement'],
-      },
-    };
+  const applyToDrive = async (driveId) => {
+    try {
+      const token = localStorage.getItem('placementpulse_token');
+      const res = await fetch('http://localhost:5000/api/applications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ driveId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchApplications();
+        showToast('Application submitted successfully!', 'success');
+        return { success: true, application: data };
+      } else {
+        showToast(data.message || 'Failed to submit application', 'error');
+        return { success: false, message: data.message };
+      }
+    } catch (e) {
+      showToast('Network error submitting application', 'error');
+      return { success: false, message: e.message };
+    }
+  };
 
-    setDrives((prev) => [newDrive, ...prev]);
-    showToast(`New recruitment drive for ${newDrive.company} published!`, 'success');
-    return newDrive;
+  const postNewDrive = async (driveData) => {
+    try {
+      const token = localStorage.getItem('placementpulse_token');
+      const res = await fetch('http://localhost:5000/api/drives', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(driveData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchDrives();
+        showToast(`New recruitment drive for ${data.company || driveData.company} published!`, 'success');
+        return { success: true, drive: data };
+      } else {
+        showToast(data.message || 'Failed to post drive', 'error');
+        return { success: false, message: data.message };
+      }
+    } catch (e) {
+      showToast('Network error posting drive', 'error');
+      return { success: false, message: e.message };
+    }
   };
 
   const updateProfile = async (updatedFields) => {
@@ -263,7 +224,7 @@ export function PlacementProvider({ children }) {
   };
 
   const deleteDrive = (driveId) => {
-    setDrives((prev) => prev.filter((d) => d.id !== driveId));
+    setDrives((prev) => prev.filter((d) => d._id !== driveId && d.id !== driveId));
     showToast('Drive archived from active listings.', 'info');
   };
 
@@ -279,6 +240,8 @@ export function PlacementProvider({ children }) {
         hasApplied,
         applyToDrive,
         postNewDrive,
+        fetchDrives,
+        fetchApplications,
         updateProfile,
         addSkillToProfile,
         deleteDrive,

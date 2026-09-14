@@ -57,7 +57,7 @@ router.get('/', protect, async (req, res) => {
     }
 
     const applications = await Application.find(filter)
-      .populate('student', 'name email branch cgpa skills')
+      .populate('student', 'name email branch cgpa skills rollNo')
       .populate('drive', 'title company')
       .sort({ createdAt: -1 });
 
