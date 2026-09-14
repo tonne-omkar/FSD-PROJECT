@@ -7,7 +7,26 @@ const router = express.Router();
 // POST /api/drives
 router.post('/', protect, authorize('tpo', 'recruiter'), async (req, res) => {
   try {
-    const { title, description, eligibleBranches, minCgpa, skillsRequired } = req.body;
+    const {
+      title,
+      description,
+      eligibleBranches,
+      minCgpa,
+      skillsRequired,
+      role,
+      ctc,
+      ctcNumber,
+      deadline,
+      location,
+      jobType,
+      workMode,
+      status,
+      bondPeriod,
+      perks,
+      responsibilities,
+      recruitmentRounds,
+    } = req.body;
+
     let company = req.body.company;
 
     if (req.user.role === 'recruiter') {
@@ -33,6 +52,18 @@ router.post('/', protect, authorize('tpo', 'recruiter'), async (req, res) => {
       minCgpa: minCgpa !== undefined ? minCgpa : undefined,
       skillsRequired: skillsRequired || [],
       postedBy: req.user._id,
+      role,
+      ctc,
+      ctcNumber,
+      deadline,
+      location,
+      jobType,
+      workMode,
+      status: status || 'Open',
+      bondPeriod,
+      perks: perks || [],
+      responsibilities: responsibilities || [],
+      recruitmentRounds: recruitmentRounds || [],
     });
 
     const createdDrive = await drive.save();
